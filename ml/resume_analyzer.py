@@ -1,4 +1,7 @@
 import re
+import os
+import shutil
+
 from pypdf import PdfReader
 
 
@@ -90,6 +93,57 @@ SKILL_CATEGORIES = {
 
 
 # ============================================================
+# FIND TESSERACT
+# ============================================================
+
+def configure_tesseract():
+    """
+    Configure Tesseract OCR for both Windows and Linux/Streamlit Cloud.
+    """
+
+    import pytesseract
+
+    # --------------------------------------------------------
+    # 1. Check whether tesseract is already in PATH
+    # --------------------------------------------------------
+
+    tesseract_executable = shutil.which("tesseract")
+
+    if tesseract_executable:
+
+        pytesseract.pytesseract.tesseract_cmd = (
+            tesseract_executable
+        )
+
+        return tesseract_executable
+
+    # --------------------------------------------------------
+    # 2. Windows fallback
+    # --------------------------------------------------------
+
+    windows_paths = [
+
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
+    ]
+
+    for path in windows_paths:
+
+        if os.path.exists(path):
+
+            pytesseract.pytesseract.tesseract_cmd = path
+
+            return path
+
+    # --------------------------------------------------------
+    # 3. Nothing found
+    # --------------------------------------------------------
+
+    return None
+
+
+# ============================================================
 # PDF TEXT EXTRACTION
 # ============================================================
 
@@ -98,12 +152,16 @@ def extract_text_from_pdf(pdf_path):
     """
     Extract text from a PDF.
 
-    First tries normal PDF text extraction using pypdf.
-    If no usable text is found, automatically falls back
-    to OCR using Tesseract.
-    """
+    First:
+        Try normal PDF text extraction.
 
-    from pypdf import PdfReader
+    If no readable text is found:
+        Convert PDF pages to images and use Tesseract OCR.
+
+    Works on:
+        Windows
+        Streamlit Cloud / Linux
+    """
 
     # ========================================================
     # STEP 1 — NORMAL PDF TEXT EXTRACTION
@@ -120,6 +178,7 @@ def extract_text_from_pdf(pdf_path):
             text = page.extract_text()
 
             if text:
+
                 extracted_text += text + "\n"
 
     except Exception as error:
@@ -127,7 +186,6 @@ def extract_text_from_pdf(pdf_path):
         print(
             f"⚠️ Normal PDF extraction failed: {error}"
         )
-
 
     # ========================================================
     # CHECK WHETHER TEXT WAS FOUND
@@ -141,7 +199,6 @@ def extract_text_from_pdf(pdf_path):
 
         return extracted_text
 
-
     # ========================================================
     # STEP 2 — OCR FALLBACK
     # ========================================================
@@ -154,29 +211,36 @@ def extract_text_from_pdf(pdf_path):
         "🔍 Switching to OCR..."
     )
 
-
     try:
 
         import pytesseract
 
         from pdf2image import convert_from_path
 
-
         # ----------------------------------------------------
-        # TESSERACT LOCATION
+        # CONFIGURE TESSERACT
         # ----------------------------------------------------
 
-        tesseract_path = (
-            r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        tesseract_executable = configure_tesseract()
+
+        if not tesseract_executable:
+
+            print(
+                "❌ Tesseract OCR executable was not found."
+            )
+
+            print(
+                "Please install Tesseract or configure it in PATH."
+            )
+
+            return ""
+
+        print(
+            f"✓ Tesseract found: {tesseract_executable}"
         )
 
-        pytesseract.pytesseract.tesseract_cmd = (
-            tesseract_path
-        )
-
-
         # ----------------------------------------------------
-        # CONVERT PDF PAGES TO IMAGES
+        # CONVERT PDF TO IMAGES
         # ----------------------------------------------------
 
         pages = convert_from_path(
@@ -184,13 +248,11 @@ def extract_text_from_pdf(pdf_path):
             dpi=300
         )
 
-
         # ----------------------------------------------------
         # OCR EACH PAGE
         # ----------------------------------------------------
 
         ocr_text = ""
-
 
         for page_number, page in enumerate(
             pages,
@@ -201,15 +263,12 @@ def extract_text_from_pdf(pdf_path):
                 f"🔍 OCR processing page {page_number}..."
             )
 
-
             text = pytesseract.image_to_string(
                 page,
                 lang="eng"
             )
 
-
             ocr_text += text + "\n"
-
 
         # ----------------------------------------------------
         # VERIFY OCR RESULT
@@ -223,119 +282,64 @@ def extract_text_from_pdf(pdf_path):
 
             return ocr_text
 
-
         print(
-            "❌ OCR could not extract any text."
+            "❌ OCR completed but no readable text was found."
         )
 
-
         return ""
-
 
     except Exception as error:
 
         print(
-            f"❌ OCR failed: {error}"
+            f"❌ OCR processing failed: {error}"
         )
 
         return ""
-    
 
 
 # ============================================================
-# TEXT CLEANING
-# ============================================================
-
-def clean_text(text):
-    """
-    Normalize resume text for skill detection.
-    """
-
-    # Replace multiple spaces/newlines
-    text = re.sub(r"\s+", " ", text)
-
-    return text.strip()
-
-
-# ============================================================
-# SKILL EXTRACTION
+# EXTRACT SKILLS
 # ============================================================
 
 def extract_skills(resume_text):
+
     """
-    Detect known technical skills from resume text.
+    Detect skills from resume text.
     """
 
-    cleaned_text = clean_text(resume_text)
+    found_skills = []
 
-    detected_skills = []
+    if not resume_text:
+
+        return found_skills
+
+    normalized_text = re.sub(
+        r"\s+",
+        " ",
+        resume_text
+    )
 
     for category, skills in SKILL_CATEGORIES.items():
 
         for skill in skills:
 
-            pattern = rf"(?<!\w){re.escape(skill)}(?!\w)"
+            pattern = (
+                rf"(?<!\w)"
+                rf"{re.escape(skill)}"
+                rf"(?!\w)"
+            )
 
             if re.search(
                 pattern,
-                cleaned_text,
+                normalized_text,
                 re.IGNORECASE
             ):
 
-                if skill not in detected_skills:
-                    detected_skills.append(skill)
+                if skill not in found_skills:
 
-    return detected_skills
+                    found_skills.append(skill)
 
-
-# ============================================================
-# CATEGORIZE SKILLS
-# ============================================================
-
-def categorize_skills(detected_skills):
-    """
-    Organize detected skills into categories.
-    """
-
-    categorized = {}
-
-    for category, skills in SKILL_CATEGORIES.items():
-
-        matched_skills = []
-
-        for skill in skills:
-
-            if skill in detected_skills:
-
-                matched_skills.append(skill)
-
-        if matched_skills:
-
-            categorized[category] = matched_skills
-
-    return categorized
-
-
-# ============================================================
-# EXTRACT CANDIDATE NAME
-# ============================================================
-
-def extract_candidate_name(resume_text):
-    """
-    Try to extract the candidate name from the beginning
-    of the resume.
-    """
-
-    lines = [
-        line.strip()
-        for line in resume_text.splitlines()
-        if line.strip()
-    ]
-
-    if lines:
-        return lines[0]
-
-    return "Unknown Candidate"
+    return found_skills
 
 
 # ============================================================
@@ -344,27 +348,76 @@ def extract_candidate_name(resume_text):
 
 def create_candidate_profile(
     resume_text,
-    detected_skills
+    candidate_skills
 ):
+
     """
-    Create structured candidate information.
+    Create structured candidate profile.
     """
 
-    categorized_skills = categorize_skills(
-        detected_skills
-    )
+    # --------------------------------------------------------
+    # Extract candidate name
+    # --------------------------------------------------------
 
-    candidate_name = extract_candidate_name(
-        resume_text
-    )
+    name = "Unknown Candidate"
+
+    if resume_text:
+
+        lines = [
+            line.strip()
+            for line in resume_text.splitlines()
+            if line.strip()
+        ]
+
+        if lines:
+
+            first_line = lines[0]
+
+            # Ignore obvious non-name lines
+            if (
+                len(first_line) < 60
+                and not re.search(
+                    r"@|http|www\.|resume|curriculum",
+                    first_line,
+                    re.IGNORECASE
+                )
+            ):
+
+                name = first_line
+
+    # --------------------------------------------------------
+    # Categorize skills
+    # --------------------------------------------------------
+
+    categorized_skills = {}
+
+    for category, skills in SKILL_CATEGORIES.items():
+
+        matched = []
+
+        for skill in skills:
+
+            if skill in candidate_skills:
+
+                matched.append(skill)
+
+        if matched:
+
+            categorized_skills[category] = matched
+
+    # --------------------------------------------------------
+    # Candidate profile
+    # --------------------------------------------------------
 
     return {
 
-        "name": candidate_name,
+        "name": name,
 
         "skills": categorized_skills,
 
-        "resume_text_length": len(resume_text)
+        "resume_text_length": len(
+            resume_text
+        ) if resume_text else 0
     }
 
 
@@ -376,30 +429,42 @@ if __name__ == "__main__":
 
     resume_path = "data/resume.pdf"
 
-    print("\n===== RESUME ANALYZER =====")
+    print(
+        "\n===== RESUME ANALYZER ====="
+    )
 
     resume_text = extract_text_from_pdf(
         resume_path
     )
 
-    print("\n===== RESUME TEXT =====")
+    print(
+        "\n===== RESUME TEXT ====="
+    )
 
     print(resume_text)
 
-    detected_skills = extract_skills(
+    skills = extract_skills(
         resume_text
     )
 
-    print("\n===== DETECTED SKILLS =====")
-
-    for skill in detected_skills:
-        print(f"✓ {skill}")
-
-    candidate_profile = create_candidate_profile(
-        resume_text,
-        detected_skills
+    print(
+        "\n===== DETECTED SKILLS ====="
     )
 
-    print("\n===== CANDIDATE PROFILE =====")
+    for skill in skills:
 
-    print(candidate_profile)
+        print(
+            f"✓ {skill}"
+        )
+
+    profile = create_candidate_profile(
+        resume_text,
+        skills
+    )
+
+    print(
+        "\n===== CANDIDATE PROFILE ====="
+    )
+
+    print(profile)
+
