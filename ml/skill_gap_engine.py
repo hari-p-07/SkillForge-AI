@@ -4,6 +4,90 @@
 
 
 # ============================================================
+# SKILL NORMALIZATION / ALIASES
+# ============================================================
+
+SKILL_ALIASES = {
+
+    # Programming
+    "py": "python",
+    "python3": "python",
+
+    "js": "javascript",
+    "node js": "node.js",
+    "nodejs": "node.js",
+
+    # Machine Learning
+    "ml": "machine learning",
+    "machine-learning": "machine learning",
+
+    "dl": "deep learning",
+    "deep-learning": "deep learning",
+
+    "ai": "artificial intelligence",
+
+    # NLP
+    "nlp": "nlp",
+    "natural language processing": "nlp",
+    "natural-language processing": "nlp",
+
+    # Data Science
+    "pd": "pandas",
+    "np": "numpy",
+
+    # Databases
+    "mysql": "mysql",
+    "postgres": "postgresql",
+    "postgres db": "postgresql",
+
+    # Cloud
+    "amazon web services": "aws",
+    "google cloud platform": "gcp",
+
+    # Version control
+    "version control": "git",
+    "version control system": "git",
+
+    # Machine Learning libraries
+    "sklearn": "scikit-learn",
+    "scikit learn": "scikit-learn",
+
+    # APIs
+    "rest api": "rest api",
+    "restful api": "rest api"
+}
+
+
+# ============================================================
+# NORMALIZE SKILL
+# ============================================================
+
+def normalize_skill(skill):
+    """
+    Convert a skill into a standard representation.
+    """
+
+    if not skill:
+        return ""
+
+    normalized = (
+        skill
+        .strip()
+        .lower()
+        .replace("_", " ")
+    )
+
+    normalized = " ".join(
+        normalized.split()
+    )
+
+    return SKILL_ALIASES.get(
+        normalized,
+        normalized
+    )
+
+
+# ============================================================
 # FLATTEN CANDIDATE SKILLS
 # ============================================================
 
@@ -23,6 +107,22 @@ def flatten_candidate_skills(candidate_profile):
 
 
 # ============================================================
+# CREATE NORMALIZED CANDIDATE SET
+# ============================================================
+
+def create_normalized_skill_set(skills):
+    """
+    Create a normalized set of candidate skills.
+    """
+
+    return {
+        normalize_skill(skill)
+        for skill in skills
+        if normalize_skill(skill)
+    }
+
+
+# ============================================================
 # BASIC SKILL MATCHING
 # ============================================================
 
@@ -31,21 +131,17 @@ def calculate_skill_gap(
     required_skills
 ):
     """
-    Calculate simple skill matching.
-
-    This is kept for comparison with the
-    advanced scoring system.
+    Calculate basic skill matching using
+    normalized skill names.
     """
 
-    candidate_set = {
-        skill.lower()
-        for skill in candidate_skills
-    }
+    candidate_set = create_normalized_skill_set(
+        candidate_skills
+    )
 
-    required_set = {
-        skill.lower()
-        for skill in required_skills
-    }
+    required_set = create_normalized_skill_set(
+        required_skills
+    )
 
     matching_keys = (
         candidate_set &
@@ -57,33 +153,63 @@ def calculate_skill_gap(
         candidate_set
     )
 
-    # Preserve original names
-    candidate_lookup = {
-        skill.lower(): skill
-        for skill in candidate_skills
-    }
 
-    required_lookup = {
-        skill.lower(): skill
-        for skill in required_skills
-    }
+    # --------------------------------------------------------
+    # Preserve original skill names
+    # --------------------------------------------------------
+
+    candidate_lookup = {}
+
+    for skill in candidate_skills:
+
+        key = normalize_skill(skill)
+
+        if key not in candidate_lookup:
+
+            candidate_lookup[key] = skill
+
+
+    required_lookup = {}
+
+    for skill in required_skills:
+
+        key = normalize_skill(skill)
+
+        if key not in required_lookup:
+
+            required_lookup[key] = skill
+
 
     matching_skills = sorted(
-        candidate_lookup[key]
+
+        required_lookup[key]
+
         for key in matching_keys
+
+        if key in required_lookup
     )
 
+
     missing_skills = sorted(
+
         required_lookup[key]
+
         for key in missing_keys
+
+        if key in required_lookup
     )
+
 
     if required_set:
 
         match_percentage = (
+
             len(matching_keys)
+
             /
+
             len(required_set)
+
         ) * 100
 
     else:
@@ -131,10 +257,9 @@ def calculate_category_weighted_match(
     }
 
 
-    candidate_set = {
-        skill.lower()
-        for skill in candidate_skills
-    }
+    candidate_set = create_normalized_skill_set(
+        candidate_skills
+    )
 
 
     category_scores = {}
@@ -172,7 +297,9 @@ def calculate_category_weighted_match(
 
                 "percentage": 0,
 
-                "weight": category_weight
+                "weight": category_weight,
+
+                "contribution": 0
             }
 
             continue
@@ -183,7 +310,12 @@ def calculate_category_weighted_match(
 
         for skill in skills:
 
-            if skill.lower() in candidate_set:
+            normalized_skill = normalize_skill(
+                skill
+            )
+
+
+            if normalized_skill in candidate_set:
 
                 matched += 1
 
@@ -199,13 +331,22 @@ def calculate_category_weighted_match(
 
 
         category_percentage = (
-            matched /
+
+            matched
+
+            /
+
             total_skills
+
         ) * 100
 
 
         category_contribution = (
-            category_percentage *
+
+            category_percentage
+
+            *
+
             category_weight
         )
 
@@ -269,15 +410,17 @@ def get_skill_priorities(
     followed by preferred and nice-to-have.
     """
 
-    candidate_set = {
-        skill.lower()
-        for skill in candidate_skills
-    }
+    candidate_set = create_normalized_skill_set(
+        candidate_skills
+    )
 
 
     priority_order = [
+
         "Required",
+
         "Preferred",
+
         "Nice to Have"
     ]
 
@@ -295,7 +438,12 @@ def get_skill_priorities(
 
         for skill in skills:
 
-            if skill.lower() not in candidate_set:
+            normalized_skill = normalize_skill(
+                skill
+            )
+
+
+            if normalized_skill not in candidate_set:
 
                 priorities.append({
 
@@ -316,22 +464,24 @@ if __name__ == "__main__":
 
     candidate_profile = {
 
-        "name": "Harish P",
+        "name": "Test Candidate",
 
         "skills": {
 
             "Programming Languages": [
-                "Python",
-                "Java"
+
+                "Python"
             ],
 
             "Data Science & Machine Learning": [
-                "Machine Learning",
-                "Pandas",
-                "NumPy"
+
+                "ML",
+
+                "Pandas"
             ],
 
             "Databases": [
+
                 "SQL"
             ]
         }
@@ -341,21 +491,25 @@ if __name__ == "__main__":
     categorized_job_skills = {
 
         "Required": [
+
             "Python",
-            "Java",
+
+            "Machine Learning",
+
             "SQL",
-            "Git",
-            "GitHub",
-            "Docker"
+
+            "Git"
         ],
 
         "Preferred": [
-            "Machine Learning",
-            "FastAPI",
-            "Flask"
+
+            "NLP",
+
+            "FastAPI"
         ],
 
         "Nice to Have": [
+
             "AWS"
         ]
     }
@@ -382,7 +536,7 @@ if __name__ == "__main__":
     )
 
 
-    print("\n===== SKILLFORGE AI SCORING =====")
+    print("\n===== SKILLFORGE AI SMART MATCHING =====")
 
 
     print(
@@ -421,6 +575,25 @@ if __name__ == "__main__":
         print(
             f"  Contribution: "
             f"{data['contribution']}%"
+        )
+
+
+    print("\n===== MATCHING SKILLS =====")
+
+    for skill in result["matching_skills"]:
+
+        print(
+            f"  ✓ {skill}"
+        )
+
+
+    print("\n===== MISSING SKILLS =====")
+
+
+    for skill in result["missing_skills"]:
+
+        print(
+            f"  ✗ {skill}"
         )
 
 
