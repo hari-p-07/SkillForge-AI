@@ -57,6 +57,50 @@ SKILL_ALIASES = {
     "restful api": "rest api"
 }
 
+# ============================================================
+# SKILL RELATIONSHIPS
+# ============================================================
+
+SKILL_RELATIONSHIPS = {
+
+    "machine learning": [
+        "random forest",
+        "svm",
+        "support vector machine",
+        "linear regression",
+        "logistic regression",
+        "decision tree",
+        "k-means",
+        "knn"
+    ],
+
+    "deep learning": [
+        "cnn",
+        "convolutional neural network",
+        "lstm",
+        "rnn",
+        "recurrent neural network",
+        "transformer"
+    ],
+
+    "aws": [
+        "ec2",
+        "s3",
+        "lambda",
+        "rds"
+    ],
+
+    "git": [
+        "gitlab",
+        "version control"
+    ],
+
+    "docker": [
+        "containerization",
+        "containers"
+    ]
+}
+
 
 # ============================================================
 # NORMALIZE SKILL
@@ -85,6 +129,123 @@ def normalize_skill(skill):
         normalized,
         normalized
     )
+
+# ============================================================
+# FIND RELATED SKILL EVIDENCE
+# ============================================================
+
+def find_skill_evidence(
+    target_skill,
+    candidate_skills
+):
+    """
+    Find direct and related evidence for a target skill.
+
+    Returns:
+        {
+            "skill": target skill,
+            "direct_match": True/False,
+            "related_skills": [...],
+            "evidence_score": 0-100,
+            "evidence_level": ...
+        }
+    """
+
+    target = normalize_skill(
+        target_skill
+    )
+
+    candidate_set = create_normalized_skill_set(
+        candidate_skills
+    )
+
+
+    # --------------------------------------------------------
+    # DIRECT MATCH
+    # --------------------------------------------------------
+
+    if target in candidate_set:
+
+        return {
+
+            "skill": target_skill,
+
+            "direct_match": True,
+
+            "related_skills": [],
+
+            "evidence_score": 100,
+
+            "evidence_level": "Strong"
+        }
+
+
+    # --------------------------------------------------------
+    # RELATED SKILL MATCH
+    # --------------------------------------------------------
+
+    related_skills = SKILL_RELATIONSHIPS.get(
+        target,
+        []
+    )
+
+
+    matched_related = []
+
+    for related_skill in related_skills:
+
+        normalized_related = normalize_skill(
+            related_skill
+        )
+
+        if normalized_related in candidate_set:
+
+            matched_related.append(
+                related_skill
+            )
+
+
+    # --------------------------------------------------------
+    # CALCULATE EVIDENCE
+    # --------------------------------------------------------
+
+    if len(matched_related) >= 3:
+
+        evidence_score = 90
+
+        evidence_level = "Strong"
+
+    elif len(matched_related) == 2:
+
+        evidence_score = 75
+
+        evidence_level = "Good"
+
+    elif len(matched_related) == 1:
+
+        evidence_score = 50
+
+        evidence_level = "Partial"
+
+    else:
+
+        evidence_score = 0
+
+        evidence_level = "None"
+
+
+    return {
+
+        "skill": target_skill,
+
+        "direct_match": False,
+
+        "related_skills": matched_related,
+
+        "evidence_score": evidence_score,
+
+        "evidence_level": evidence_level
+    }
 
 
 # ============================================================
@@ -610,3 +771,44 @@ if __name__ == "__main__":
             f"{item['skill']} "
             f"({item['category']})"
         )
+
+    # ========================================================
+    # SKILL EVIDENCE TEST
+    # ========================================================
+
+    print("\n===== SKILL EVIDENCE TEST =====")
+
+    test_candidate_skills = [
+        "EC2",
+        "S3",
+        "Lambda",
+        "Python"
+    ]
+
+    aws_evidence = find_skill_evidence(
+        "AWS",
+        test_candidate_skills
+    )
+
+    print("\nAWS Evidence:")
+
+    print(
+        f"  Direct Match: "
+        f"{aws_evidence['direct_match']}"
+    )
+
+    print(
+        f"  Related Skills: "
+        f"{aws_evidence['related_skills']}"
+    )
+
+    print(
+        f"  Evidence Score: "
+        f"{aws_evidence['evidence_score']}%"
+    )
+
+    print(
+        f"  Evidence Level: "
+        f"{aws_evidence['evidence_level']}"
+    )
+
