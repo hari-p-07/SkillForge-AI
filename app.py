@@ -14,7 +14,8 @@ from ml.skill_gap_engine import (
     flatten_candidate_skills,
     calculate_skill_gap,
     calculate_category_weighted_match,
-    get_skill_priorities
+    get_skill_priorities,
+    find_skill_evidence
 )
 
 
@@ -23,7 +24,6 @@ from ml.skill_gap_engine import (
 # ============================================================
 
 RESUME_PATH = "data/resume.pdf"
-
 JOB_DESCRIPTION_PATH = "data/job_description.txt"
 
 
@@ -34,11 +34,8 @@ JOB_DESCRIPTION_PATH = "data/job_description.txt"
 def main():
 
     print("\n" + "=" * 60)
-
     print("              SKILLFORGE AI")
-
     print("        Resume & Job Skill Analyzer")
-
     print("=" * 60)
 
 
@@ -81,11 +78,9 @@ def main():
         job_description
     )
 
-    categorized_job_skills = (
-        classify_skill_importance(
-            job_description,
-            job_skills
-        )
+    categorized_job_skills = classify_skill_importance(
+        job_description,
+        job_skills
     )
 
     print(
@@ -100,15 +95,13 @@ def main():
 
     print("\n[3/3] Calculating skill gap...")
 
-    candidate_skill_list = (
-        flatten_candidate_skills(
-            candidate_profile
-        )
+    candidate_skill_list = flatten_candidate_skills(
+        candidate_profile
     )
 
 
     # --------------------------------------------------------
-    # Basic score
+    # Basic matching
     # --------------------------------------------------------
 
     basic_result = calculate_skill_gap(
@@ -118,19 +111,17 @@ def main():
 
 
     # --------------------------------------------------------
-    # Category weighted score
+    # Category weighted scoring
     # --------------------------------------------------------
 
-    scoring_result = (
-        calculate_category_weighted_match(
-            candidate_skill_list,
-            categorized_job_skills
-        )
+    scoring_result = calculate_category_weighted_match(
+        candidate_skill_list,
+        categorized_job_skills
     )
 
 
     # --------------------------------------------------------
-    # Skill priorities
+    # Learning priorities
     # --------------------------------------------------------
 
     priorities = get_skill_priorities(
@@ -140,15 +131,35 @@ def main():
 
 
     # ========================================================
+    # SKILL EVIDENCE ANALYSIS
+    # ========================================================
+
+    evidence_details = []
+
+    for category, skills in categorized_job_skills.items():
+
+        for skill in skills:
+
+            evidence = find_skill_evidence(
+                skill,
+                candidate_skill_list
+            )
+
+            evidence["category"] = category
+
+            evidence_details.append(
+                evidence
+            )
+
+
+    # ========================================================
     # FINAL REPORT
     # ========================================================
 
     print("\n")
 
     print("=" * 60)
-
     print("              SKILLFORGE AI REPORT")
-
     print("=" * 60)
 
 
@@ -171,13 +182,11 @@ def main():
 
 
     # ========================================================
-    # CATEGORY SCORES
+    # CATEGORY PERFORMANCE
     # ========================================================
 
     print("\n" + "-" * 60)
-
     print("📊 CATEGORY PERFORMANCE")
-
     print("-" * 60)
 
 
@@ -185,9 +194,7 @@ def main():
         scoring_result["category_scores"].items()
     ):
 
-        print(
-            f"\n{category}"
-        )
+        print(f"\n{category}")
 
         print(
             f"  Match: "
@@ -208,93 +215,82 @@ def main():
 
 
     # ========================================================
-    # REQUIRED SKILLS
-    # ========================================================
-
-    candidate_lookup = {
-        skill.lower()
-        for skill in candidate_skill_list
-    }
-
-
-    print("\n" + "-" * 60)
-
-    print("🔴 REQUIRED SKILLS")
-
-    print("-" * 60)
-
-
-    for skill in categorized_job_skills[
-        "Required"
-    ]:
-
-        if skill.lower() in candidate_lookup:
-
-            print(
-                f"  ✓ {skill}"
-            )
-
-        else:
-
-            print(
-                f"  ✗ {skill}"
-            )
-
-
-    # ========================================================
-    # PREFERRED SKILLS
+    # SMART SKILL EVIDENCE
     # ========================================================
 
     print("\n" + "-" * 60)
-
-    print("🟡 PREFERRED SKILLS")
-
+    print("🔍 SMART SKILL EVIDENCE")
     print("-" * 60)
 
 
-    for skill in categorized_job_skills[
-        "Preferred"
-    ]:
-
-        if skill.lower() in candidate_lookup:
-
-            print(
-                f"  ✓ {skill}"
-            )
-
-        else:
-
-            print(
-                f"  ✗ {skill}"
-            )
-
-
-    # ========================================================
-    # NICE TO HAVE
-    # ========================================================
-
-    print("\n" + "-" * 60)
-
-    print("🟢 NICE TO HAVE")
-
-    print("-" * 60)
-
-
-    for skill in categorized_job_skills[
+    for category in [
+        "Required",
+        "Preferred",
         "Nice to Have"
     ]:
 
-        if skill.lower() in candidate_lookup:
+        if category == "Required":
+            print("\n🔴 REQUIRED SKILLS")
 
-            print(
-                f"  ✓ {skill}"
-            )
+        elif category == "Preferred":
+            print("\n🟡 PREFERRED SKILLS")
 
         else:
+            print("\n🟢 NICE TO HAVE")
 
-            print(
-                f"  ✗ {skill}"
-            )
+
+        for evidence in evidence_details:
+
+            if evidence["category"] != category:
+                continue
+
+
+            skill = evidence["skill"]
+
+
+            # ------------------------------------------------
+            # DIRECT MATCH
+            # ------------------------------------------------
+
+            if evidence["direct_match"]:
+
+                print(
+                    f"  ✓ {skill} "
+                    f"[Direct Match]"
+                )
+
+
+            # ------------------------------------------------
+            # RELATED EVIDENCE
+            # ------------------------------------------------
+
+            elif evidence["evidence_score"] > 0:
+
+                related = ", ".join(
+                    evidence["related_skills"]
+                )
+
+                print(
+                    f"  ⚡ {skill} "
+                    f"[{evidence['evidence_level']} Evidence - "
+                    f"{evidence['evidence_score']}%]"
+                )
+
+                print(
+                    f"      Related: {related}"
+                )
+
+
+            # ------------------------------------------------
+            # MISSING
+            # ------------------------------------------------
+
+            else:
+
+                print(
+                    f"  ✗ {skill} "
+                    f"[Missing]"
+                )
 
 
     # ========================================================
@@ -302,9 +298,7 @@ def main():
     # ========================================================
 
     print("\n" + "-" * 60)
-
     print("📚 LEARNING PRIORITY")
-
     print("-" * 60)
 
 
@@ -333,9 +327,7 @@ def main():
     # ========================================================
 
     print("\n" + "-" * 60)
-
     print("📌 SUMMARY")
-
     print("-" * 60)
 
 
@@ -358,9 +350,7 @@ def main():
 
 
     print("\n" + "=" * 60)
-
     print("          END OF SKILLFORGE AI REPORT")
-
     print("=" * 60)
 
 
@@ -369,5 +359,4 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
-
     main()

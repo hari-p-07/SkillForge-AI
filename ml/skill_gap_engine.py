@@ -390,9 +390,8 @@ def calculate_skill_gap(
         )
     }
 
-
 # ============================================================
-# CATEGORY-WEIGHTED SCORING
+# EVIDENCE-AWARE CATEGORY WEIGHTED SCORING
 # ============================================================
 
 def calculate_category_weighted_match(
@@ -400,21 +399,390 @@ def calculate_category_weighted_match(
     categorized_job_skills
 ):
     """
-    Calculate candidate suitability using
-    category-level importance.
+    Calculate category-weighted score using
+    direct and related skill evidence.
 
-    Required      = 70%
-    Preferred     = 20%
-    Nice to Have  = 10%
+    Direct Match       = 100%
+    Strong Evidence    = 90%
+    Good Evidence      = 75%
+    Partial Evidence   = 50%
+    Missing            = 0%
+
+    Category weights:
+        Required      = 70%
+        Preferred     = 20%
+        Nice to Have  = 10%
     """
 
     category_weights = {
-
         "Required": 0.70,
-
         "Preferred": 0.20,
-
         "Nice to Have": 0.10
+    }
+
+    category_scores = {}
+
+    overall_score = 0
+
+    matching_skills = []
+    missing_skills = []
+
+    evidence_details = []
+
+    # ========================================================
+    # PROCESS EACH CATEGORY
+    # ========================================================
+
+    for category, skills in categorized_job_skills.items():
+
+        category_weight = category_weights.get(
+            category,
+            0
+        )
+
+        total_skills = len(skills)
+
+        if total_skills == 0:
+
+            category_scores[category] = {
+                "matched": 0,
+                "total": 0,
+                "percentage": 0,
+                "weight": category_weight,
+                "contribution": 0
+            }
+
+            continue
+
+        category_evidence_total = 0
+
+        matched = 0
+
+        for skill in skills:
+
+            evidence = find_skill_evidence(
+                skill,
+                candidate_skills
+            )
+
+            evidence_score = evidence[
+                "evidence_score"
+            ]
+
+            category_evidence_total += (
+                evidence_score
+            )
+
+            # ------------------------------------------------
+            # DIRECT MATCH
+            # ------------------------------------------------
+
+            if evidence["direct_match"]:
+
+                matched += 1
+
+                matching_skills.append(
+                    skill
+                )
+
+            # ------------------------------------------------
+            # RELATED EVIDENCE
+            # ------------------------------------------------
+
+            elif evidence_score > 0:
+
+                matching_skills.append(
+                    skill
+                )
+
+            # ------------------------------------------------
+            # MISSING
+            # ------------------------------------------------
+
+            else:
+
+                missing_skills.append(
+                    skill
+                )
+
+            # ------------------------------------------------
+            # STORE EVIDENCE
+            # ------------------------------------------------
+
+            evidence_details.append({
+
+                "skill": skill,
+
+                "category": category,
+
+                "direct_match":
+                    evidence["direct_match"],
+
+                "related_skills":
+                    evidence["related_skills"],
+
+                "evidence_score":
+                    evidence_score,
+
+                "evidence_level":
+                    evidence["evidence_level"]
+            })
+
+        # ====================================================
+        # CATEGORY EVIDENCE SCORE
+        # ====================================================
+
+        category_percentage = (
+            category_evidence_total
+            /
+            total_skills
+        )
+
+        category_contribution = (
+            category_percentage
+            *
+            category_weight
+        )
+
+        overall_score += (
+            category_contribution
+        )
+
+        category_scores[category] = {
+
+            "matched": matched,
+
+            "total": total_skills,
+
+            "percentage": round(
+                category_percentage,
+                2
+            ),
+
+            "weight": category_weight,
+
+            "contribution": round(
+                category_contribution,
+                2
+            )
+        }
+
+    # ========================================================
+    # RETURN RESULT
+    # ========================================================
+
+    return {
+
+        "overall_score": round(
+            overall_score,
+            2
+        ),
+
+        "category_scores":
+            category_scores,
+
+        "matching_skills":
+            sorted(
+                set(matching_skills)
+            ),
+
+        "missing_skills":
+            sorted(
+                set(missing_skills)
+            ),
+
+        "evidence_details":
+            evidence_details
+    }
+
+
+
+
+    # ========================================================
+    # PROCESS EACH CATEGORY
+    # ========================================================
+
+    for category, skills in categorized_job_skills.items():
+
+        category_weight = category_weights.get(
+            category,
+            0
+        )
+
+        total_skills = len(skills)
+
+        if total_skills == 0:
+
+            category_scores[category] = {
+                "matched": 0,
+                "total": 0,
+                "percentage": 0,
+                "weight": category_weight,
+                "contribution": 0
+            }
+
+            continue
+
+
+        category_points = 0
+
+        direct_matches = 0
+
+        evidence_matches = 0
+
+
+        # ----------------------------------------------------
+        # CHECK EVERY REQUIRED JOB SKILL
+        # ----------------------------------------------------
+
+        for skill in skills:
+
+            evidence = find_skill_evidence(
+                skill,
+                candidate_skills
+            )
+
+            evidence_score = evidence[
+                "evidence_score"
+            ]
+
+
+            # ------------------------------------------------
+            # DIRECT MATCH
+            # ------------------------------------------------
+
+            if evidence["direct_match"]:
+
+                direct_matches += 1
+
+                matching_skills.append(skill)
+
+
+            # ------------------------------------------------
+            # RELATED EVIDENCE
+            # ------------------------------------------------
+
+            elif evidence_score > 0:
+
+                evidence_matches += 1
+
+                matching_skills.append(
+                    skill
+                )
+
+
+            # ------------------------------------------------
+            # NO MATCH
+            # ------------------------------------------------
+
+            else:
+
+                missing_skills.append(
+                    skill
+                )
+
+
+            category_points += (
+                evidence_score / 100
+            )
+
+
+            # ------------------------------------------------
+            # SAVE EVIDENCE INFORMATION
+            # ------------------------------------------------
+
+            evidence_details.append({
+
+                "skill": skill,
+
+                "category": category,
+
+                "direct_match":
+                    evidence["direct_match"],
+
+                "related_skills":
+                    evidence["related_skills"],
+
+                "evidence_score":
+                    evidence_score,
+
+                "evidence_level":
+                    evidence["evidence_level"]
+            })
+
+
+        # ----------------------------------------------------
+        # CATEGORY SCORE
+        # ----------------------------------------------------
+
+        category_percentage = (
+            category_points /
+            total_skills
+        ) * 100
+
+
+        category_contribution = (
+            category_percentage *
+            category_weight
+        )
+
+
+        overall_score += (
+            category_contribution
+        )
+
+
+        category_scores[category] = {
+
+            "matched":
+                direct_matches,
+
+            "evidence_matches":
+                evidence_matches,
+
+            "total":
+                total_skills,
+
+            "percentage":
+                round(
+                    category_percentage,
+                    2
+                ),
+
+            "weight":
+                category_weight,
+
+            "contribution":
+                round(
+                    category_contribution,
+                    2
+                )
+        }
+
+
+    return {
+
+        "overall_score":
+            round(
+                overall_score,
+                2
+            ),
+
+        "category_scores":
+            category_scores,
+
+        "matching_skills":
+            sorted(
+                set(matching_skills)
+            ),
+
+        "missing_skills":
+            sorted(
+                set(missing_skills)
+            ),
+
+        "evidence_details":
+            evidence_details
     }
 
 

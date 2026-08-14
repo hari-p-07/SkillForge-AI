@@ -1,6 +1,4 @@
 import streamlit as st
-import tempfile
-import os
 
 from ml.resume_analyzer import (
     extract_text_from_pdf,
@@ -15,13 +13,14 @@ from ml.job_analyser import (
 
 from ml.skill_gap_engine import (
     flatten_candidate_skills,
+    calculate_skill_gap,
     calculate_category_weighted_match,
     get_skill_priorities
 )
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -38,489 +37,438 @@ st.set_page_config(
 st.title("🎯 SkillForge AI")
 
 st.subheader(
-    "AI-Powered Resume & Job Skill Matching"
+    "AI-Powered Resume & Job Skill Analyzer"
 )
 
 st.write(
-    "Upload your resume and paste a job description "
-    "to discover your skill match, skill gaps, and "
-    "learning priorities."
+    "Upload your resume and provide a job description "
+    "to discover your skill match, skill gaps and learning priorities."
 )
-
-
-st.divider()
 
 
 # ============================================================
 # INPUT SECTION
 # ============================================================
 
-left_column, right_column = st.columns(2)
+st.divider()
+
+col1, col2 = st.columns(2)
 
 
-# ------------------------------------------------------------
-# RESUME UPLOAD
-# ------------------------------------------------------------
+with col1:
 
-with left_column:
-
-    st.header("📄 Upload Resume")
+    st.subheader("📄 Resume")
 
     uploaded_resume = st.file_uploader(
-        "Upload your resume PDF",
+        "Upload your resume",
         type=["pdf"]
     )
 
 
-# ------------------------------------------------------------
-# JOB DESCRIPTION
-# ------------------------------------------------------------
+with col2:
 
-with right_column:
-
-    st.header("📋 Job Description")
+    st.subheader("💼 Job Description")
 
     job_description = st.text_area(
         "Paste the job description here",
         height=250,
-        placeholder=(
-            "Example:\n\n"
-            "We are looking for a Python developer "
-            "with experience in SQL, Git, Docker..."
-        )
+        placeholder="Paste the job description..."
     )
-
-
-st.divider()
 
 
 # ============================================================
 # ANALYZE BUTTON
 # ============================================================
 
-analyze_button = st.button(
-    "🔍 Analyze My Match",
+if st.button(
+    "🚀 Analyze Resume",
     type="primary",
     use_container_width=True
-)
-
-
-# ============================================================
-# ANALYSIS
-# ============================================================
-
-if analyze_button:
+):
 
     if uploaded_resume is None:
 
         st.error(
-            "⚠️ Please upload your resume PDF."
+            "Please upload a resume PDF."
         )
 
-    elif not job_description.strip():
+        st.stop()
+
+
+    if not job_description.strip():
 
         st.error(
-            "⚠️ Please enter a job description."
+            "Please enter a job description."
         )
 
-    else:
-
-        try:
-
-            # =================================================
-            # SAVE UPLOADED RESUME TEMPORARILY
-            # =================================================
-
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".pdf"
-            ) as temp_file:
-
-                temp_file.write(
-                    uploaded_resume.getvalue()
-                )
-
-                temp_resume_path = temp_file.name
+        st.stop()
 
 
-            # =================================================
-            # STEP 1 — RESUME ANALYSIS
-            # =================================================
+    # ========================================================
+    # SAVE TEMPORARY RESUME
+    # ========================================================
 
-            with st.spinner(
-                "🔍 Analyzing your resume..."
-            ):
+    temp_resume_path = "data/uploaded_resume.pdf"
 
-                resume_text = (
-                    extract_text_from_pdf(
-                        temp_resume_path
-                    )
-                )
+    with open(
+        temp_resume_path,
+        "wb"
+    ) as file:
 
-                candidate_skills = (
-                    extract_skills(
-                        resume_text
-                    )
-                )
-
-                candidate_profile = (
-                    create_candidate_profile(
-                        resume_text,
-                        candidate_skills
-                    )
-                )
+        file.write(
+            uploaded_resume.getbuffer()
+        )
 
 
-            # =================================================
-            # STEP 2 — JOB ANALYSIS
-            # =================================================
+    # ========================================================
+    # RESUME ANALYSIS
+    # ========================================================
 
-            with st.spinner(
-                "🧠 Analyzing job requirements..."
-            ):
+    with st.spinner(
+        "🔍 Analyzing resume..."
+    ):
 
-                job_skills = (
-                    extract_job_skills(
-                        job_description
-                    )
-                )
+        resume_text = extract_text_from_pdf(
+            temp_resume_path
+        )
 
-                categorized_job_skills = (
-                    classify_skill_importance(
-                        job_description,
-                        job_skills
-                    )
-                )
+        candidate_skills = extract_skills(
+            resume_text
+        )
 
-
-            # =================================================
-            # STEP 3 — MATCHING
-            # =================================================
-
-            with st.spinner(
-                "📊 Calculating your skill match..."
-            ):
-
-                candidate_skill_list = (
-                    flatten_candidate_skills(
-                        candidate_profile
-                    )
-                )
-
-                scoring_result = (
-                    calculate_category_weighted_match(
-                        candidate_skill_list,
-                        categorized_job_skills
-                    )
-                )
-
-                priorities = (
-                    get_skill_priorities(
-                        candidate_skill_list,
-                        categorized_job_skills
-                    )
-                )
+        candidate_profile = create_candidate_profile(
+            resume_text,
+            candidate_skills
+        )
 
 
-            # =================================================
-            # CLEANUP TEMPORARY FILE
-            # =================================================
+    # ========================================================
+    # JOB ANALYSIS
+    # ========================================================
 
-            os.remove(
-                temp_resume_path
+    with st.spinner(
+        "💼 Analyzing job description..."
+    ):
+
+        job_skills = extract_job_skills(
+            job_description
+        )
+
+        categorized_job_skills = (
+            classify_skill_importance(
+                job_description,
+                job_skills
+            )
+        )
+
+
+    # ========================================================
+    # SKILL GAP ANALYSIS
+    # ========================================================
+
+    with st.spinner(
+        "🧠 Calculating skill gap..."
+    ):
+
+        candidate_skill_list = (
+            flatten_candidate_skills(
+                candidate_profile
+            )
+        )
+
+        basic_result = calculate_skill_gap(
+            candidate_skill_list,
+            job_skills
+        )
+
+        scoring_result = (
+            calculate_category_weighted_match(
+                candidate_skill_list,
+                categorized_job_skills
+            )
+        )
+
+        priorities = get_skill_priorities(
+            candidate_skill_list,
+            categorized_job_skills
+        )
+
+
+    # ========================================================
+    # CANDIDATE
+    # ========================================================
+
+    st.divider()
+
+    st.header(
+        f"👤 Candidate: {candidate_profile['name']}"
+    )
+
+
+    # ========================================================
+    # SCORE CARDS
+    # ========================================================
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        st.metric(
+            "🎯 Overall Match",
+            f"{scoring_result['overall_score']}%"
+        )
+
+
+    with col2:
+
+        st.metric(
+            "📊 Basic Match",
+            f"{basic_result['match_percentage']}%"
+        )
+
+
+    with col3:
+
+        st.metric(
+            "🧠 Skills Detected",
+            len(candidate_skill_list)
+        )
+
+
+    # ========================================================
+    # CATEGORY PERFORMANCE
+    # ========================================================
+
+    st.divider()
+
+    st.header("📊 Category Performance")
+
+
+    category_data = scoring_result[
+        "category_scores"
+    ]
+
+
+    for category, data in category_data.items():
+
+        if category == "Required":
+
+            icon = "🔴"
+
+        elif category == "Preferred":
+
+            icon = "🟡"
+
+        else:
+
+            icon = "🟢"
+
+
+        st.subheader(
+            f"{icon} {category}"
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+
+        with col1:
+
+            st.metric(
+                "Score",
+                f"{data['percentage']}%"
             )
 
 
-            # =================================================
-            # RESULTS
-            # =================================================
+        with col2:
 
-            st.success(
-                "✅ Analysis completed successfully!"
+            st.metric(
+                "Weight",
+                f"{data['weight'] * 100}%"
             )
 
 
-            st.divider()
+        with col3:
 
-
-            # =================================================
-            # CANDIDATE
-            # =================================================
-
-            st.header(
-                f"👤 Candidate: "
-                f"{candidate_profile['name']}"
+            st.metric(
+                "Contribution",
+                f"{data['contribution']}%"
             )
 
 
-            # =================================================
-            # OVERALL SCORE
-            # =================================================
+        st.progress(
+            min(
+                data["percentage"] / 100,
+                1.0
+            )
+        )
 
-            overall_score = (
-                scoring_result["overall_score"]
+
+    # ========================================================
+    # SMART SKILL EVIDENCE
+    # ========================================================
+
+    st.divider()
+
+    st.header(
+        "🔍 Smart Skill Evidence"
+    )
+
+
+    evidence_lookup = {
+        item["skill"]: item
+        for item in scoring_result[
+            "evidence_details"
+        ]
+    }
+
+
+    for category in [
+        "Required",
+        "Preferred",
+        "Nice to Have"
+    ]:
+
+        if category == "Required":
+
+            icon = "🔴"
+
+        elif category == "Preferred":
+
+            icon = "🟡"
+
+        else:
+
+            icon = "🟢"
+
+
+        st.subheader(
+            f"{icon} {category}"
+        )
+
+
+        for skill in categorized_job_skills.get(
+            category,
+            []
+        ):
+
+            evidence = evidence_lookup.get(
+                skill
             )
 
 
-            score_column, skill_column = st.columns(2)
+            if not evidence:
+                continue
 
 
-            with score_column:
-
-                st.metric(
-                    "🎯 Overall Match",
-                    f"{overall_score}%"
-                )
-
-
-            with skill_column:
-
-                st.metric(
-                    "🧠 Skills Detected",
-                    len(candidate_skill_list)
-                )
-
-
-            st.divider()
-
-
-            # =================================================
-            # CATEGORY PERFORMANCE
-            # =================================================
-
-            st.header(
-                "📊 Skill Category Performance"
-            )
-
-
-            category_data = (
-                scoring_result[
-                    "category_scores"
-                ]
-            )
-
-
-            category_columns = st.columns(3)
-
-
-            categories = [
-                ("Required", "🔴"),
-                ("Preferred", "🟡"),
-                ("Nice to Have", "🟢")
-            ]
-
-
-            for column, (category, emoji) in zip(
-                category_columns,
-                categories
-            ):
-
-                data = category_data.get(
-                    category,
-                    {
-                        "matched": 0,
-                        "total": 0,
-                        "percentage": 0
-                    }
-                )
-
-
-                with column:
-
-                    st.subheader(
-                        f"{emoji} {category}"
-                    )
-
-                    st.metric(
-                        "Match",
-                        f"{data['percentage']}%"
-                    )
-
-                    st.write(
-                        f"{data['matched']} / "
-                        f"{data['total']} skills"
-                    )
-
-
-            st.divider()
-
-
-            # =================================================
-            # REQUIRED SKILLS
-            # =================================================
-
-            st.header(
-                "🔴 Required Skills"
-            )
-
-
-            candidate_lookup = {
-                skill.lower()
-                for skill in candidate_skill_list
-            }
-
-
-            for skill in categorized_job_skills[
-                "Required"
-            ]:
-
-                if skill.lower() in candidate_lookup:
-
-                    st.success(
-                        f"✓ {skill}"
-                    )
-
-                else:
-
-                    st.error(
-                        f"✗ {skill}"
-                    )
-
-
-            # =================================================
-            # PREFERRED SKILLS
-            # =================================================
-
-            st.header(
-                "🟡 Preferred Skills"
-            )
-
-
-            for skill in categorized_job_skills[
-                "Preferred"
-            ]:
-
-                if skill.lower() in candidate_lookup:
-
-                    st.success(
-                        f"✓ {skill}"
-                    )
-
-                else:
-
-                    st.warning(
-                        f"✗ {skill}"
-                    )
-
-
-            # =================================================
-            # NICE TO HAVE
-            # =================================================
-
-            st.header(
-                "🟢 Nice to Have"
-            )
-
-
-            for skill in categorized_job_skills[
-                "Nice to Have"
-            ]:
-
-                if skill.lower() in candidate_lookup:
-
-                    st.success(
-                        f"✓ {skill}"
-                    )
-
-                else:
-
-                    st.info(
-                        f"✗ {skill}"
-                    )
-
-
-            st.divider()
-
-
-            # =================================================
-            # LEARNING PRIORITY
-            # =================================================
-
-            st.header(
-                "📚 Recommended Learning Priorities"
-            )
-
-
-            if priorities:
-
-                for index, item in enumerate(
-                    priorities,
-                    start=1
-                ):
-
-                    category = item[
-                        "category"
-                    ]
-
-                    skill = item[
-                        "skill"
-                    ]
-
-                    if category == "Required":
-
-                        st.error(
-                            f"**{index}. {skill}** "
-                            f"— Required"
-                        )
-
-                    elif category == "Preferred":
-
-                        st.warning(
-                            f"**{index}. {skill}** "
-                            f"— Preferred"
-                        )
-
-                    else:
-
-                        st.info(
-                            f"**{index}. {skill}** "
-                            f"— Nice to Have"
-                        )
-
-            else:
+            if evidence["direct_match"]:
 
                 st.success(
-                    "🎉 No skill gaps detected!"
+                    f"✓ {skill} — Direct Match"
                 )
 
 
-            st.divider()
+            elif evidence["evidence_score"] > 0:
 
-
-            # =================================================
-            # FINAL MESSAGE
-            # =================================================
-
-            if overall_score >= 80:
-
-                st.success(
-                    "🌟 Strong candidate match!"
+                related = ", ".join(
+                    evidence["related_skills"]
                 )
-
-            elif overall_score >= 60:
-
-                st.info(
-                    "👍 Good match. A few skill gaps "
-                    "should be addressed."
-                )
-
-            elif overall_score >= 40:
 
                 st.warning(
-                    "⚠️ Moderate match. Focus on the "
-                    "required missing skills."
+                    f"⚡ {skill} — "
+                    f"{evidence['evidence_level']} Evidence "
+                    f"({evidence['evidence_score']}%)\n\n"
+                    f"Related: {related}"
                 )
+
 
             else:
 
                 st.error(
-                    "🚨 Significant skill gaps detected. "
-                    "Consider developing the priority skills."
+                    f"✗ {skill} — Missing"
                 )
 
 
-        except Exception as error:
+    # ========================================================
+    # LEARNING PRIORITY
+    # ========================================================
 
-            st.error(
-                f"❌ Something went wrong:\n\n{error}"
+    st.divider()
+
+    st.header(
+        "📚 Learning Priority"
+    )
+
+
+    if priorities:
+
+        for index, item in enumerate(
+            priorities,
+            start=1
+        ):
+
+            st.write(
+                f"**{index}. {item['skill']}** "
+                f"— {item['category']}"
             )
+
+    else:
+
+        st.success(
+            "🎉 No skill gaps detected!"
+        )
+
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    st.divider()
+
+    st.header("📌 Summary")
+
+
+    col1, col2, col3 = st.columns(3)
+
+
+    with col1:
+
+        st.metric(
+            "Matching Skills",
+            len(
+                scoring_result[
+                    "matching_skills"
+                ]
+            )
+        )
+
+
+    with col2:
+
+        st.metric(
+            "Missing Skills",
+            len(
+                scoring_result[
+                    "missing_skills"
+                ]
+            )
+        )
+
+
+    with col3:
+
+        st.metric(
+            "Overall Score",
+            f"{scoring_result['overall_score']}%"
+        )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+st.caption(
+    "SkillForge AI — Resume & Job Skill Analyzer"
+)
