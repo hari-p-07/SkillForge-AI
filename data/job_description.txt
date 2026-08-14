@@ -1,0 +1,11 @@
+We are looking for an entry-level Python Developer to join our
+software development team.
+
+Requirements:
+Strong programming skills in Python and Java.
+Good knowledge of SQL and databases.
+Experience with Machine Learning and data processing is preferred.
+Knowledge of Git and GitHub.
+Basic experience with Docker.
+Knowledge of AWS cloud services is an advantage.
+Experience with FastAPI or Flask is preferred.
